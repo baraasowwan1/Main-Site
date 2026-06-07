@@ -5,7 +5,7 @@ import Footer from '../components/Footer';
 import {
   Plus, Save, Eye, Settings as SettingsIcon, Trash2, Globe,
   Type, Image as ImageIcon, Layout, Mail, Grid, Columns,
-  Facebook, Twitter, Instagram, Linkedin
+  Edit2, X, FileText, Link as LinkIcon
 } from 'lucide-react';
 import { PayPalButtons, PayPalScriptProvider } from '@paypal/react-paypal-js';
 
@@ -28,11 +28,14 @@ export default function WebsiteBuilder() {
   const navigate = useNavigate();
   const [websiteId, setWebsiteId] = useState<string>('');
   const [siteName, setSiteName] = useState('My Website');
+  const [customDomain, setCustomDomain] = useState('');
   const [pages, setPages] = useState<Page[]>([]);
   const [currentPage, setCurrentPage] = useState<Page | null>(null);
   const [previewMode, setPreviewMode] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [editingComponent, setEditingComponent] = useState<string | null>(null);
 
   const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:10000/api';
   const PAYPAL_CLIENT_ID = import.meta.env.VITE_PAYPAL_CLIENT_ID;
@@ -49,23 +52,21 @@ export default function WebsiteBuilder() {
     { type: 'footer', icon: Globe, label: 'Footer', color: 'bg-gray-700' }
   ];
 
-  // Initialize
   useEffect(() => {
     loadOrCreateWebsite();
   }, []);
 
   const loadOrCreateWebsite = async () => {
-    // For MVP: Use localStorage for session, but save to backend
     const savedId = localStorage.getItem('currentWebsiteId');
 
     if (savedId) {
-      // Load from backend
       try {
         const response = await fetch(`${API_BASE}/websites/${savedId}`);
         const data = await response.json();
         if (data.success) {
           setWebsiteId(data.website.websiteId);
           setSiteName(data.website.siteName);
+          setCustomDomain(data.website.customDomain || '');
           setPages(data.website.pages);
           setCurrentPage(data.website.pages[0]);
           return;
@@ -75,7 +76,6 @@ export default function WebsiteBuilder() {
       }
     }
 
-    // Create new website
     createNewWebsite();
   };
 
@@ -85,8 +85,8 @@ export default function WebsiteBuilder() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ownerId: 'user_' + Date.now(), // In production: real user ID
-          ownerEmail: 'customer@example.com', // In production: real email
+          ownerId: 'user_' + Date.now(),
+          ownerEmail: 'customer@example.com',
           siteName: 'My New Website'
         })
       });
@@ -105,12 +105,43 @@ export default function WebsiteBuilder() {
     }
   };
 
+  const addPage = () => {
+    const pageName = prompt('Enter page name:');
+    if (!pageName) return;
+
+    const newPage: Page = {
+      pageId: 'page_' + Date.now(),
+      name: pageName,
+      path: '/' + pageName.toLowerCase().replace(/\s+/g, '-'),
+      components: []
+    };
+
+    const updatedPages = [...pages, newPage];
+    setPages(updatedPages);
+    setCurrentPage(newPage);
+  };
+
+  const deletePage = (pageId: string) => {
+    if (pages.length === 1) {
+      alert('Cannot delete the last page');
+      return;
+    }
+
+    if (confirm('Delete this page?')) {
+      const updatedPages = pages.filter(p => p.pageId !== pageId);
+      setPages(updatedPages);
+      if (currentPage?.pageId === pageId) {
+        setCurrentPage(updatedPages[0]);
+      }
+    }
+  };
+
   const addComponent = (type: string) => {
     if (!currentPage) return;
 
     const newComponent: Component = {
       id: Date.now().toString(),
-      type,
+      type: type as any,
       props: getDefaultProps(type)
     };
 
@@ -223,7 +254,8 @@ export default function WebsiteBuilder() {
         body: JSON.stringify({
           pages,
           siteName,
-          settings: { siteName }
+          customDomain,
+          settings: { siteName, customDomain }
         })
       });
 
@@ -265,9 +297,176 @@ export default function WebsiteBuilder() {
     }
   };
 
-  // Component Renderers
+  const renderComponentEditor = (component: Component) => {
+    if (editingComponent !== component.id) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold">Edit {component.type}</h2>
+            <button onClick={() => setEditingComponent(null)} className="text-gray-500 hover:text-gray-700">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {component.type === 'hero' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block font-semibold mb-2">Title</label>
+                <input
+                  type="text"
+                  value={component.props.title}
+                  onChange={(e) => updateComponent(component.id, { title: e.target.value })}
+                  className="w-full px-4 py-2 border rounded"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold mb-2">Subtitle</label>
+                <input
+                  type="text"
+                  value={component.props.subtitle}
+                  onChange={(e) => updateComponent(component.id, { subtitle: e.target.value })}
+                  className="w-full px-4 py-2 border rounded"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold mb-2">Background Color</label>
+                <input
+                  type="color"
+                  value={component.props.backgroundColor}
+                  onChange={(e) => updateComponent(component.id, { backgroundColor: e.target.value })}
+                  className="w-full h-12 border rounded"
+                />
+              </div>
+            </div>
+          )}
+
+          {component.type === 'text' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block font-semibold mb-2">Content</label>
+                <textarea
+                  value={component.props.content}
+                  onChange={(e) => updateComponent(component.id, { content: e.target.value })}
+                  className="w-full px-4 py-2 border rounded h-32"
+                />
+              </div>
+            </div>
+          )}
+
+          {component.type === 'image' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block font-semibold mb-2">Image URL</label>
+                <input
+                  type="text"
+                  value={component.props.url}
+                  onChange={(e) => updateComponent(component.id, { url: e.target.value })}
+                  className="w-full px-4 py-2 border rounded"
+                  placeholder="https://images.unsplash.com/..."
+                />
+              </div>
+              <div>
+                <label className="block font-semibold mb-2">Caption</label>
+                <input
+                  type="text"
+                  value={component.props.caption}
+                  onChange={(e) => updateComponent(component.id, { caption: e.target.value })}
+                  className="w-full px-4 py-2 border rounded"
+                />
+              </div>
+              <p className="text-sm text-gray-600">
+                💡 Tip: Use <a href="https://unsplash.com" target="_blank" className="text-blue-600 underline">Unsplash.com</a> for free high-quality images
+              </p>
+            </div>
+          )}
+
+          {component.type === 'button' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block font-semibold mb-2">Button Text</label>
+                <input
+                  type="text"
+                  value={component.props.text}
+                  onChange={(e) => updateComponent(component.id, { text: e.target.value })}
+                  className="w-full px-4 py-2 border rounded"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold mb-2">Link URL</label>
+                <input
+                  type="text"
+                  value={component.props.link}
+                  onChange={(e) => updateComponent(component.id, { link: e.target.value })}
+                  className="w-full px-4 py-2 border rounded"
+                  placeholder="https://example.com or /about"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold mb-2">Button Color</label>
+                <input
+                  type="color"
+                  value={component.props.backgroundColor}
+                  onChange={(e) => updateComponent(component.id, { backgroundColor: e.target.value })}
+                  className="w-full h-12 border rounded"
+                />
+              </div>
+            </div>
+          )}
+
+          {component.type === 'gallery' && (
+            <div className="space-y-4">
+              <label className="block font-semibold mb-2">Images</label>
+              {component.props.images.map((img: any, idx: number) => (
+                <div key={idx} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={img.url}
+                    onChange={(e) => {
+                      const newImages = [...component.props.images];
+                      newImages[idx].url = e.target.value;
+                      updateComponent(component.id, { images: newImages });
+                    }}
+                    className="flex-1 px-4 py-2 border rounded"
+                    placeholder="Image URL"
+                  />
+                  <button
+                    onClick={() => {
+                      const newImages = component.props.images.filter((_: any, i: number) => i !== idx);
+                      updateComponent(component.id, { images: newImages });
+                    }}
+                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => {
+                  const newImages = [...component.props.images, { url: '', alt: 'New image' }];
+                  updateComponent(component.id, { images: newImages });
+                }}
+                className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              >
+                + Add Image
+              </button>
+            </div>
+          )}
+
+          <button
+            onClick={() => setEditingComponent(null)}
+            className="w-full mt-6 bg-blue-600 text-white py-3 rounded hover:bg-blue-700"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const renderComponent = (component: Component) => {
-    const { type, props, id } = component;
+    const { type, props } = component;
 
     switch (type) {
       case 'hero':
@@ -423,24 +622,63 @@ export default function WebsiteBuilder() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
 
-      {/* Builder UI */}
       <div className="flex-1 flex">
-        {/* Sidebar - Component Library */}
-        <div className="w-64 bg-white border-r border-gray-200 p-4 overflow-y-auto">
-          <h3 className="font-bold text-lg mb-4">Components</h3>
-          <div className="space-y-2">
-            {componentTypes.map(({ type, icon: Icon, label, color }) => (
+        {/* Sidebar */}
+        <div className="w-64 bg-white border-r border-gray-200 overflow-y-auto">
+          {/* Pages Section */}
+          <div className="p-4 border-b">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-bold text-lg">Pages</h3>
               <button
-                key={type}
-                onClick={() => addComponent(type)}
-                className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 transition text-left"
+                onClick={addPage}
+                className="bg-blue-600 text-white p-1 rounded hover:bg-blue-700"
               >
-                <div className={`${color} p-2 rounded`}>
-                  <Icon className="w-5 h-5 text-white" />
-                </div>
-                <span className="font-medium">{label}</span>
+                <Plus className="w-4 h-4" />
               </button>
-            ))}
+            </div>
+            <div className="space-y-1">
+              {pages.map(page => (
+                <div
+                  key={page.pageId}
+                  className={`flex justify-between items-center p-2 rounded cursor-pointer ${
+                    currentPage?.pageId === page.pageId ? 'bg-blue-50 border border-blue-600' : 'hover:bg-gray-50'
+                  }`}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  <span className="text-sm font-medium">{page.name}</span>
+                  {pages.length > 1 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deletePage(page.pageId);
+                      }}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Components Section */}
+          <div className="p-4">
+            <h3 className="font-bold text-lg mb-4">Components</h3>
+            <div className="space-y-2">
+              {componentTypes.map(({ type, icon: Icon, label, color }) => (
+                <button
+                  key={type}
+                  onClick={() => addComponent(type)}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 transition text-left"
+                >
+                  <div className={`${color} p-2 rounded`}>
+                    <Icon className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="font-medium text-sm">{label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -454,6 +692,13 @@ export default function WebsiteBuilder() {
               className="text-xl font-bold border-0 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2"
             />
             <div className="flex gap-2">
+              <button
+                onClick={() => setShowSettings(true)}
+                className="flex items-center gap-2 bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300"
+              >
+                <SettingsIcon className="w-4 h-4" />
+                Settings
+              </button>
               <button
                 onClick={saveWebsite}
                 disabled={isSaving}
@@ -494,17 +739,77 @@ export default function WebsiteBuilder() {
                 {renderComponent(component)}
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-2">
                   <button
+                    onClick={() => setEditingComponent(component.id)}
+                    className="bg-blue-600 text-white p-2 rounded shadow hover:bg-blue-700"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
                     onClick={() => deleteComponent(component.id)}
                     className="bg-red-600 text-white p-2 rounded shadow hover:bg-red-700"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+                {renderComponentEditor(component)}
               </div>
             ))}
           </div>
         </div>
       </div>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h2 className="text-2xl font-bold mb-4">Website Settings</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block font-semibold mb-2">Site Name</label>
+                <input
+                  type="text"
+                  value={siteName}
+                  onChange={(e) => setSiteName(e.target.value)}
+                  className="w-full px-4 py-2 border rounded"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold mb-2">Custom Domain</label>
+                <input
+                  type="text"
+                  value={customDomain}
+                  onChange={(e) => setCustomDomain(e.target.value)}
+                  placeholder="www.yourdomain.com"
+                  className="w-full px-4 py-2 border rounded"
+                />
+                <p className="text-sm text-gray-600 mt-2">
+                  After publishing, you can connect your custom domain
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-6">
+              <button
+                onClick={() => {
+                  setShowSettings(false);
+                  saveWebsite();
+                }}
+                className="flex-1 bg-blue-600 text-white py-3 rounded hover:bg-blue-700"
+              >
+                Save Settings
+              </button>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="flex-1 bg-gray-200 text-gray-800 py-3 rounded hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Publish Modal */}
       {showPublish && PAYPAL_CLIENT_ID && (
