@@ -4,7 +4,10 @@ import Services from './pages/Services';
 import WebsiteBuilder from './pages/WebsiteBuilder';
 import CustomRequest from './pages/CustomRequest';
 import PaymentSuccess from './pages/PaymentSuccess';
+import EnhancedWebsiteBuilder from './pages/EnhancedWebsiteBuilder';
 
+// In routes:
+<Route path="/website-builder" element={<EnhancedWebsiteBuilder />} />
 export default function App() {
   return (
     <Router>
