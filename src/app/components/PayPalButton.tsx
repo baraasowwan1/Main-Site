@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { PayPalButtons, PayPalScriptProvider } from '@paypal/react-paypal-js';
 import { useNavigate } from 'react-router-dom';
+import { ordersApi } from '../services/api';
 
 interface PayPalButtonProps {
   amount: string;
@@ -8,73 +9,108 @@ interface PayPalButtonProps {
 }
 
 export default function PayPalButton({ amount, serviceName, serviceId }: PayPalButtonProps) {
-  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handlePayment = () => {
-    setIsLoading(true);
+  // PayPal Client ID from environment variable
+  const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID;
 
-    // DEMO: In production, this would integrate with PayPal SDK
-    // PayPal integration requires:
-    // 1. PayPal Business account
-    // 2. Client ID and Secret
-    // 3. Server-side order creation and verification
-
-    setTimeout(() => {
-      // Simulate payment success
-      const orderData = {
-        orderId: 'DEMO_' + Date.now(),
-        service: serviceName,
-        serviceId: serviceId,
-        amount: amount,
-        date: new Date().toISOString(),
-        status: 'completed'
-      };
-
-      // Store order in localStorage (in production, this would be saved to database)
-      const existingOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-      existingOrders.push(orderData);
-      localStorage.setItem('orders', JSON.stringify(existingOrders));
-
-      navigate('/payment-success');
-      setIsLoading(false);
-    }, 2000);
-  };
-
-  return (
-    <div className="space-y-4">
-      {/* Demo Notice */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <p className="text-sm text-yellow-800">
-          <strong>Demo Mode:</strong> This is a demonstration. Real PayPal integration requires backend setup.
+  if (!paypalClientId) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <p className="text-sm text-red-800">
+          <strong>Error:</strong> PayPal is not configured. Please contact support.
         </p>
       </div>
+    );
+  }
 
-      {/* PayPal Button */}
-      <button
-        onClick={handlePayment}
-        disabled={isLoading}
-        className="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold py-4 px-6 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-      >
-        {isLoading ? (
-          <>
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-900"></div>
-            Processing...
-          </>
-        ) : (
-          <>
-            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.77.77 0 0 1 .762-.633h8.167c2.7 0 4.588.543 5.615 1.615 1.014 1.059 1.397 2.656 1.14 4.748-.296 2.407-1.174 4.138-2.61 5.147-1.408 1.015-3.49 1.53-6.188 1.53H9.697a.77.77 0 0 0-.762.634l-.518 3.283-.024.125a.372.372 0 0 1-.368.313zm.374-7.78l.8-5.066a.372.372 0 0 1 .368-.313h1.867c1.194 0 2.054-.28 2.556-.833.488-.537.732-1.398.724-2.561 0-.022 0-.045.002-.067a.372.372 0 0 1 .371-.345h2.022a.372.372 0 0 1 .368.413c-.138 2.085-.813 3.498-2.006 4.2-1.18.695-2.954 1.047-5.271 1.047H7.82a.372.372 0 0 0-.37.413z"/>
-            </svg>
-            Pay with PayPal
-          </>
-        )}
-      </button>
+  return (
+    <PayPalScriptProvider
+      options={{
+        clientId: paypalClientId,
+        currency: 'USD',
+        intent: 'capture'
+      }}
+    >
+      <div className="space-y-4">
+        {/* Info */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p className="text-sm text-blue-800">
+            <strong>Secure Payment:</strong> You'll be redirected to PayPal to complete your purchase.
+          </p>
+        </div>
 
-      {/* Alternative Payment Note */}
-      <p className="text-center text-sm text-gray-600">
-        Secure payment processing powered by PayPal
-      </p>
-    </div>
+        {/* PayPal Buttons */}
+        <PayPalButtons
+          style={{
+            layout: 'vertical',
+            color: 'gold',
+            shape: 'rect',
+            label: 'paypal'
+          }}
+          createOrder={(data, actions) => {
+            return actions.order.create({
+              purchase_units: [
+                {
+                  amount: {
+                    value: amount,
+                    currency_code: 'USD'
+                  },
+                  description: serviceName
+                }
+              ],
+              application_context: {
+                brand_name: 'SowwanPay Services',
+                shipping_preference: 'NO_SHIPPING'
+              }
+            });
+          }}
+          onApprove={async (data, actions) => {
+            try {
+              // Capture the payment
+              const details = await actions.order!.capture();
+              
+              console.log('Payment captured:', details);
+
+              // Save order to database
+              const orderData = {
+                orderId: details.id,
+                service: serviceName,
+                serviceId: serviceId,
+                amount: amount,
+                payerEmail: details.payer?.email_address,
+                payerName: details.payer?.name?.given_name + ' ' + details.payer?.name?.surname,
+                status: 'completed'
+              };
+
+              // Send to backend
+              await ordersApi.create(orderData);
+
+              // Navigate to success page
+              navigate('/payment-success', { 
+                state: { 
+                  orderDetails: details,
+                  service: serviceName 
+                } 
+              });
+            } catch (error) {
+              console.error('Payment capture error:', error);
+              alert('Payment failed. Please try again or contact support.');
+            }
+          }}
+          onError={(err) => {
+            console.error('PayPal error:', err);
+            alert('An error occurred with PayPal. Please try again.');
+          }}
+          onCancel={() => {
+            console.log('Payment cancelled by user');
+          }}
+        />
+
+        <p className="text-center text-sm text-gray-600">
+          Secure payment processing powered by PayPal
+        </p>
+      </div>
+    </PayPalScriptProvider>
   );
 }
