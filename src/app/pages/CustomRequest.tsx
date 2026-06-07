@@ -29,23 +29,43 @@ export default function CustomRequest() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // DEMO: In production, this would send email to sowwanpay@gmail.com
-    // For now, store in localStorage and simulate email
-    const request = {
-      ...formData,
-      id: 'REQ_' + Date.now(),
-      date: new Date().toISOString(),
-      status: 'pending'
-    };
+    try {
+      // Send to backend API - will send real email via SendGrid
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:10000/api';
 
-    const existingRequests = JSON.parse(localStorage.getItem('customRequests') || '[]');
-    existingRequests.push(request);
-    localStorage.setItem('customRequests', JSON.stringify(existingRequests));
+      const response = await fetch(`${API_BASE}/custom-requests`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+      });
 
-    setTimeout(() => {
+      const data = await response.json();
+
+      if (data.success) {
+        // Also store in localStorage for admin demo
+        const request = {
+          ...formData,
+          id: data.requestId,
+          date: new Date().toISOString(),
+          status: 'pending'
+        };
+
+        const existingRequests = JSON.parse(localStorage.getItem('customRequests') || '[]');
+        existingRequests.push(request);
+        localStorage.setItem('customRequests', JSON.stringify(existingRequests));
+
+        setIsSubmitted(true);
+      } else {
+        throw new Error(data.error || 'Failed to submit request');
+      }
+    } catch (error) {
+      console.error('Error submitting request:', error);
+      alert('Failed to submit request. Please try again or contact us directly at sowwanpay@gmail.com');
+    } finally {
       setIsSubmitting(false);
-      setIsSubmitted(true);
-    }, 1500);
+    }
   };
 
   if (isSubmitted) {
@@ -61,9 +81,9 @@ export default function CustomRequest() {
                 Thank you for your custom website request. We've received your details and will review them carefully.
                 Our team will contact you at <strong>{formData.email}</strong> within 24-48 hours to discuss your project.
               </p>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
                 <p className="text-sm text-gray-700">
-                  <strong>Note:</strong> In production, this request would be automatically sent to sowwanpay@gmail.com
+                  <strong>✓ Email Sent:</strong> Your request has been sent to sowwanpay@gmail.com
                 </p>
               </div>
               <button
@@ -245,10 +265,10 @@ export default function CustomRequest() {
                 />
               </div>
 
-              {/* Demo Notice */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <p className="text-sm text-yellow-800">
-                  <strong>Demo Mode:</strong> In production, this form would automatically send an email to sowwanpay@gmail.com with all your details.
+              {/* Email Notice */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-800">
+                  <strong>📧 Email Notification:</strong> When you submit this form, we'll receive your request at sowwanpay@gmail.com and respond within 24-48 hours.
                 </p>
               </div>
 
