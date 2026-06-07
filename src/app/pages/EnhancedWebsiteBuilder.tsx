@@ -2,17 +2,19 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import { 
-  Plus, Save, Eye, Settings as SettingsIcon, Trash2, Globe, 
-  Type, Image as ImageIcon, Layout, Mail, Grid, Columns, 
+import {
+  Plus, Save, Eye, Settings as SettingsIcon, Trash2, Globe,
+  Type, Image as ImageIcon, Layout, Mail, Grid, Columns,
   Facebook, Twitter, Instagram, Linkedin
 } from 'lucide-react';
 import { PayPalButtons, PayPalScriptProvider } from '@paypal/react-paypal-js';
 
 interface Component {
   id: string;
-  type: string;
-  props: any;
+  type: 'hero' | 'text' | 'image' | 'button' | 'contact' | 'gallery' | 'columns' | 'footer';
+  props: {
+    [key: string]: any;
+  };
 }
 
 interface Page {
@@ -22,7 +24,7 @@ interface Page {
   components: Component[];
 }
 
-export default function EnhancedWebsiteBuilder() {
+export default function WebsiteBuilder() {
   const navigate = useNavigate();
   const [websiteId, setWebsiteId] = useState<string>('');
   const [siteName, setSiteName] = useState('My Website');
@@ -55,7 +57,7 @@ export default function EnhancedWebsiteBuilder() {
   const loadOrCreateWebsite = async () => {
     // For MVP: Use localStorage for session, but save to backend
     const savedId = localStorage.getItem('currentWebsiteId');
-    
+
     if (savedId) {
       // Load from backend
       try {
@@ -122,18 +124,18 @@ export default function EnhancedWebsiteBuilder() {
 
   const getDefaultProps = (type: string) => {
     const defaults: Record<string, any> = {
-      hero: { 
-        title: 'Welcome to My Website', 
+      hero: {
+        title: 'Welcome to My Website',
         subtitle: 'Start your journey here',
         backgroundColor: '#3B82F6',
         textColor: '#FFFFFF'
       },
-      text: { 
+      text: {
         content: 'Add your text content here. You can write anything you want!',
         fontSize: '16px',
         textAlign: 'left'
       },
-      image: { 
+      image: {
         url: 'https://images.unsplash.com/photo-1557683316-973673baf926',
         alt: 'Beautiful image',
         caption: 'Image caption'
@@ -181,7 +183,7 @@ export default function EnhancedWebsiteBuilder() {
 
   const updateCurrentPage = (updatedPage: Page) => {
     setCurrentPage(updatedPage);
-    const updatedPages = pages.map(p => 
+    const updatedPages = pages.map(p =>
       p.pageId === updatedPage.pageId ? updatedPage : p
     );
     setPages(updatedPages);
@@ -213,19 +215,20 @@ export default function EnhancedWebsiteBuilder() {
 
   const saveWebsite = async () => {
     setIsSaving(true);
-    
+
     try {
       const response = await fetch(`${API_BASE}/websites/${websiteId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pages,
+          siteName,
           settings: { siteName }
         })
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         alert('Website saved successfully!');
       } else {
@@ -250,7 +253,7 @@ export default function EnhancedWebsiteBuilder() {
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         alert(`Website published! Live at: ${data.url}`);
         window.open(data.url, '_blank');
@@ -269,8 +272,8 @@ export default function EnhancedWebsiteBuilder() {
     switch (type) {
       case 'hero':
         return (
-          <div 
-            style={{ 
+          <div
+            style={{
               backgroundColor: props.backgroundColor,
               color: props.textColor,
               padding: '100px 20px',
@@ -292,9 +295,9 @@ export default function EnhancedWebsiteBuilder() {
       case 'image':
         return (
           <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-            <img 
-              src={props.url} 
-              alt={props.alt} 
+            <img
+              src={props.url}
+              alt={props.alt}
               style={{ maxWidth: '100%', height: 'auto', borderRadius: '8px' }}
             />
             {props.caption && (
@@ -351,9 +354,9 @@ export default function EnhancedWebsiteBuilder() {
           <div style={{ padding: '60px 20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', maxWidth: '1200px', margin: '0 auto' }}>
               {props.images.map((img: any, idx: number) => (
-                <img 
+                <img
                   key={idx}
-                  src={img.url} 
+                  src={img.url}
                   alt={img.alt}
                   style={{ width: '100%', height: '250px', objectFit: 'cover', borderRadius: '8px' }}
                 />
